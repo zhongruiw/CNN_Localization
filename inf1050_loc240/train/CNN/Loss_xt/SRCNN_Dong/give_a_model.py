@@ -235,7 +235,7 @@ def srcnn(**kwargs):
     # compile the model
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=1e-5),
-        loss=XtLoss(inputs, model_size, nobs, kwargs['batch_size']),
+        loss=XtLoss(model_size, nobs, kwargs['batch_size']),
         # loss=tf.keras.losses.MeanSquaredError(),
         # experimental_run_tf_function=False,
         metrics=[GradientNorm()],
