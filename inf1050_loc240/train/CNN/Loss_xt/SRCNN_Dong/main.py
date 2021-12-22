@@ -94,7 +94,7 @@ test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
 test_dataset = test_dataset.batch(batch_size)
 
 # --------------------- specify a model ---------------------
-model = srcnn()
+model = srcnn(batch_size=batch_size)
 model.summary()
 model.output_shape
 
@@ -197,7 +197,7 @@ else:
     val_dataset = val_dataset.shuffle(buffer_size=y_val.shape[0], reshuffle_each_iteration=True).batch(batch_size)
 
     # define and compile the model
-    model = srcnn()
+    model = srcnn(batch_size=batch_size)
 
     # train the model
     history = model.fit(train_dataset, epochs=4, validation_data=val_dataset)
