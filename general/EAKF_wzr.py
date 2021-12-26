@@ -4,7 +4,35 @@ from numba import prange
 # from time import time
 
 
-def EAKF_wzr(serial_update, model_size, ensemble_size, adm_ensemble_size, nobsgrid, zens, zens_adm, Hk, obs_error_var, localize, CMat, zobs):
+def EAKF_wzr(serial_update, model_size, ensemble_size, adm_ensemble_size, nobsgrid, zens, zens_adm, Hk, obs_error_var, localize, CMat, zobs, **kwargs):
+    if serial_update == 0:
+        rn = 1.0 / (ensemble_size - 1)
+        for iobs in range(0, nobsgrid):
+            xmean = np.mean(zens, axis=0)  # 1xn
+            xprime = zens - xmean
+            hxens = (Hk[iobs, :] * zens.T).T  # 40*1
+            hxmean = np.mean(hxens, axis=0)
+            hxprime = hxens - hxmean
+            hpbht = (hxprime.T * hxprime * rn)[0, 0]
+            gainfact = (hpbht + obs_error_var) / hpbht * (1.0 - np.sqrt(obs_error_var / (hpbht + obs_error_var)))
+            pbht = (xprime.T * hxprime) * rn
+
+            if localize == 1:
+                Cvect = CMat[iobs, :]
+                eps = kwargs['eps_inde'][iobs, :]
+                kfgain = np.multiply(Cvect.T, (pbht / (hpbht + obs_error_var))) + eps.T
+            else:
+                kfgain = pbht / (hpbht + obs_error_var)
+
+            mean_inc = (kfgain * (zobs[0, iobs] - hxmean)).T
+            prime_inc = - (gainfact * kfgain * hxprime.T).T
+
+            zens = zens + mean_inc + prime_inc
+
+        # zens = serial2(nobsgrid, np.array(zens), np.array(Hk), rn, obs_error_var, localize, np.array(CMat), zobs, mean_numba)
+        # return np.mat(zens)
+        return zens
+
     if serial_update == 1:
         rn = 1.0 / (ensemble_size - 1)
         for iobs in range(0, nobsgrid):
