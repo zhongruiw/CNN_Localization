@@ -9,6 +9,7 @@ sys.path.append('/home/lllei/AI_localization/L05/git_repo/general')
 from numba import jit
 import numpy as np
 from construct_GC_2d import construct_GC_2d
+from construct_func_2d import construct_func_2d
 from EAKF_wzr import EAKF_wzr
 from os.path import dirname, join as pjoin
 from scipy.io import loadmat
