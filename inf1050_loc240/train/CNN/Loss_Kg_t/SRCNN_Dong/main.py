@@ -52,38 +52,38 @@ kg_f = np.load('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240
 #     fname = '/scratch/lllei/kg_f_25y_{:d}.npy'
 #     kg_f = np.concatenate((kg_f, np.load(fname.format(i))), axis=0)
 
-## Loss: kgain mse
-# kg_t = np.load('/home/lllei/AI_localization/L05/spatially_averaged/avrange_00625/200040/kg_t_5y.npy')
+# Loss: kgain mse
+kg_t = np.load('/home/lllei/AI_localization/L05/spatially_averaged/avrange_00625/200040/kg_t_5y.npy')
 
-# # roll kg (optional)
-# # for j in range(0, nobs):
-# #     kg_f[:, :, j] = np.roll(kg_f[:, :, j], -(obs_dens*j+obs_dens-1), axis=1)
-# #     kg_t[:, :, j] = np.roll(kg_t[:, :, j], -(obs_dens*j+obs_dens-1), axis=1)
-
-# # exclude the unsaturated period
-# cut_out = 50
-# x = kg_f[cut_out:, :, :, np.newaxis]
-# y = kg_t[cut_out:, :, :, np.newaxis]
-
-## Loss: xt
-truthf = loadmat('/home/lllei/data/zt_5year_ms3_6h.mat')
-ztruth = truthf['zens_times']
-xt = ztruth[1:,:]
-xf = np.load('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240/200040/save_interval_6h/zeakf_prior.npy')
-xf = xf[:, 1:]
-obs = np.load('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240/200040/save_interval_6h/observations.npy')
-obs = obs[1:, :]
-incs = obs - (Hk @ xf).T
-xf = xf.T
-xt_xf_inc = np.concatenate((xt,xf,incs), axis=1)
-
-if np.shape(xt_xf_inc)[0] != np.shape(kg_f)[0]:
-    raise ValueError('check the consistence between xt and Kgain_f')
+# roll kg (optional)
+# for j in range(0, nobs):
+#     kg_f[:, :, j] = np.roll(kg_f[:, :, j], -(obs_dens*j+obs_dens-1), axis=1)
+#     kg_t[:, :, j] = np.roll(kg_t[:, :, j], -(obs_dens*j+obs_dens-1), axis=1)
 
 # exclude the unsaturated period
 cut_out = 50
 x = kg_f[cut_out:, :, :, np.newaxis]
-y = xt_xf_inc[cut_out:, :, np.newaxis]
+y = kg_t[cut_out:, :, :, np.newaxis]
+
+## Loss: xt
+# truthf = loadmat('/home/lllei/data/zt_5year_ms3_6h.mat')
+# ztruth = truthf['zens_times']
+# xt = ztruth[1:,:]
+# xf = np.load('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240/200040/save_interval_6h/zeakf_prior.npy')
+# xf = xf[:, 1:]
+# obs = np.load('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240/200040/save_interval_6h/observations.npy')
+# obs = obs[1:, :]
+# incs = obs - (Hk @ xf).T
+# xf = xf.T
+# xt_xf_inc = np.concatenate((xt,xf,incs), axis=1)
+
+# if np.shape(xt_xf_inc)[0] != np.shape(kg_f)[0]:
+#     raise ValueError('check the consistence between xt and Kgain_f')
+
+# # exclude the unsaturated period
+# cut_out = 50
+# x = kg_f[cut_out:, :, :, np.newaxis]
+# y = xt_xf_inc[cut_out:, :, np.newaxis]
 
 # split dataset into test set and train-val dataset
 x_traval, x_test, y_traval, y_test = train_test_split(x, y, test_size=0.1, random_state=248)

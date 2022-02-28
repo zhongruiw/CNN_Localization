@@ -1,7 +1,7 @@
 # ----- L05ensrf  -----
 # coding by Zhongrui Wang
-# version: 1.1
-# update: git repo; allow deflation
+# version: 1.2
+# update: multiple inf,loc; git repo; allow deflation
 
 import sys 
 sys.path.append('/home/lllei/AI_localization/L05/git_repo/general')
@@ -45,8 +45,6 @@ print('observations error std:', np.std(zt-zobs_total))
 
 
 def ensrf(ztruth, zics_total, zobs_total):
-    # -------------------- assimilation ---------------------
-
     serial_update = 1
 
     # analysis period
@@ -58,10 +56,11 @@ def ensrf(ztruth, zics_total, zobs_total):
     ensemble_size = 40
     ens_mem_beg = 1
     ens_mem_end = ens_mem_beg + ensemble_size
-
-    inflation_value = 1.0
+    inflation_values = [1.0,1.01,1.02,1.03,1.04,1.05]
+    ninf = len(inflation_values)
+    localization_values = [240]
+    nloc = len(localization_values)
     localize = 1
-    localization_value = 240
     localize_inde = 1
     # -------------------------------------------------------------------------------
 
@@ -132,75 +131,101 @@ def ensrf(ztruth, zics_total, zobs_total):
     a[2 * smooth_steps] = a[2 * smooth_steps] / 2.00
     # -------------------------------------------------------------------------------
     
-    CMat = np.mat(construct_GC_2d(localization_value, model_size, obs_grids))
-    # CMat_inde = np.mat(construct_func_2d(localize_inde_func, model_size, obs_grids))
-    # eps_inde = np.mat(construct_func_2d(localize_inde_eps, model_size, obs_grids))
-    # cmat = np.array(CMat)
-    # cmat_inde = np.array(CMat_inde)
-    # CMat_state = np.mat(construct_GC_2d(localization_value, model_size, model_grids))
+    prior_rmse = np.zeros((nobstime,ninf,nloc))
+    analy_rmse = np.zeros((nobstime,ninf,nloc))
+    prior_spread_rmse = np.zeros((nobstime,ninf,nloc))
+    analy_spread_rmse = np.zeros((nobstime,ninf,nloc))    
+    prior_err = np.zeros((ninf,nloc))
+    analy_err = np.zeros((ninf,nloc))
 
-    zens = np.mat(zics_total[ens_mem_beg: ens_mem_end, :])  # ensemble are drawn from ics set
+    for iinf in range(ninf):
+        inflation_value = inflation_values[iinf]
 
-    prior_spread = np.zeros((model_size, nobstime))
-    analy_spread = np.zeros((model_size, nobstime))
-    zeakf_prior = np.zeros((model_size, nobstime))
-    zeakf_analy = np.empty((model_size, nobstime))
-    # zens_times = np.empty((time_steps+1, model_size))
+        for iloc in range(nloc):
+            localization_value = localization_values[iloc]
 
-    for iassim in range(0, nobstime):
-        print(iassim)
+            CMat = np.mat(construct_GC_2d(localization_value, model_size, obs_grids))
+            # CMat_inde = np.mat(construct_func_2d(localize_inde_func, model_size, obs_grids))
+            # eps_inde = np.mat(construct_func_2d(localize_inde_eps, model_size, obs_grids))
+            # cmat = np.array(CMat)
+            # cmat_inde = np.array(CMat_inde)
+            # CMat_state = np.mat(construct_GC_2d(localization_value, model_size, model_grids))
 
-        # EnKF step
-        obsstep = iassim * obs_freq_timestep + 1
+            zens = np.mat(zics_total[ens_mem_beg: ens_mem_end, :])  # ensemble are drawn from ics set
 
-        zeakf_prior[:, iassim] = np.mean(zens, axis=0)  # prior ensemble mean
-        prior_spread[:, iassim] = np.std(zens, axis=0, ddof=1)
+            prior_spread = np.zeros((model_size, nobstime))
+            analy_spread = np.zeros((model_size, nobstime))
+            zeakf_prior = np.zeros((model_size, nobstime))
+            zeakf_analy = np.empty((model_size, nobstime))
+            # zens_times = np.empty((time_steps+1, model_size))
 
-        zobs = np.mat(zobs_total[iassim, :])
+            for iassim in range(0, nobstime):
+                print(iassim)
 
-        ensmean = np.mean(zens, axis=0)
-        ensp = zens - ensmean
-        zens = ensmean + ensp * inflation_value
+                # EnKF step
+                obsstep = iassim * obs_freq_timestep + 1
 
-        # save inflated prior zens
-        zens_prior = zens
+                zeakf_prior[:, iassim] = np.mean(zens, axis=0)  # prior ensemble mean
+                prior_spread[:, iassim] = np.std(zens, axis=0, ddof=1)
 
-        # serial EnSRF update
-        zens = EAKF_wzr(1, model_size, ensemble_size, ensemble_size,
-                        nobsgrid, zens, zens, Hk, obs_error_var, localize, CMat, zobs)
+                zobs = np.mat(zobs_total[iassim, :])
 
-        # save zens_analy_kg_f
-        zens_analy_kg_f = np.mean(zens, axis=0)
-        zeakf_analy[:, iassim] = zens_analy_kg_f
+                # # inflation RTPP
+                # ensmean = np.mean(zens, axis=0)
+                # ensp = zens - ensmean
+                # zens = ensmean + ensp * inflation_value
 
-        # save analy_spread
-        analy_spread[:, iassim] = np.std(zens, axis=0, ddof=1)
+                # save inflated prior zens
+                zens_prior = zens
 
-        # check for an explosion
-        if False in np.isreal(zens):
-            print('Found complex numbers, stopping this run')
-            return
+                # serial EnSRF update
+                zens = EAKF_wzr(1, model_size, ensemble_size, ensemble_size,
+                                nobsgrid, zens, zens, Hk, obs_error_var, localize, CMat, zobs)
 
-        # ensemble model advance, but no advance model from the last obs
-        if iassim < nobstime - 1:
-            step_beg = obsstep
-            step_end = (iassim + 1) * obs_freq_timestep
-            # start = time.time()
-            for istep in range(step_beg, step_end + 1):
-                zens = step_L04(ensemble_size, zens, model_size, ss2, smooth_steps, a, model_number, K4, H, K, K2, sts2, coupling,
-                                 space_time_scale, forcing, delta_t)
-            
-    zt = ztruth[0: time_steps + 1: obs_freq_timestep, :].T
-    prior_rmse = np.sqrt(np.mean((zt - zeakf_prior) ** 2, axis=0))
-    analy_rmse = np.sqrt(np.mean((zt - zeakf_analy) ** 2, axis=0))
-    prior_spread_rmse = np.sqrt(np.mean(prior_spread ** 2, axis=0))
-    analy_spread_rmse = np.sqrt(np.mean(analy_spread ** 2, axis=0))
+                # inflation RTPS
+                std_prior = np.std(zens_prior, axis=0, ddof=1)
+                std_analy = np.std(zens, axis=0, ddof=1)
+                ensmean = np.mean(zens, axis=0)
+                ensp = zens - ensmean
+                zens = ensmean + np.multiply(ensp, (1 + inflation_value*(std_prior-std_analy)/std_analy))
+               
+                # save zens_analy_kg_f
+                zens_analy_kg_f = np.mean(zens, axis=0)
+                zeakf_analy[:, iassim] = zens_analy_kg_f
 
-    prior_err = np.mean(prior_rmse[iobsbeg - 1: iobsend])
-    analy_err = np.mean(analy_rmse[iobsbeg - 1: iobsend])
+                # save analy_spread
+                analy_spread[:, iassim] = np.std(zens, axis=0, ddof=1)
 
-    print('prior gc error = {0:.6f}'.format(prior_err))
-    print('analysis gc error = {0:.6f}'.format(analy_err))
+                # check for an explosion
+                if False in np.isreal(zens):
+                    print('Found complex numbers, stopping this run')
+                    return
+
+                # ensemble model advance, but no advance model from the last obs
+                if iassim < nobstime - 1:
+                    step_beg = obsstep
+                    step_end = (iassim + 1) * obs_freq_timestep
+                    # start = time.time()
+                    for istep in range(step_beg, step_end + 1):
+                        zens = step_L04(ensemble_size, zens, model_size, ss2, smooth_steps, a, model_number, K4, H, K, K2, sts2, coupling,
+                                         space_time_scale, forcing, delta_t)
+                    
+            zt = ztruth[0: time_steps + 1: obs_freq_timestep, :].T
+            prior_rmse[:, iinf, iloc] = np.sqrt(np.mean((zt - zeakf_prior) ** 2, axis=0))
+            analy_rmse[:, iinf, iloc] = np.sqrt(np.mean((zt - zeakf_analy) ** 2, axis=0))
+            prior_spread_rmse[:, iinf, iloc] = np.sqrt(np.mean(prior_spread ** 2, axis=0))
+            analy_spread_rmse[:, iinf, iloc] = np.sqrt(np.mean(analy_spread ** 2, axis=0))
+
+            prior_err[iinf, iloc] = np.mean(prior_rmse[iobsbeg - 1: iobsend, iinf, iloc])
+            analy_err[iinf, iloc] = np.mean(analy_rmse[iobsbeg - 1: iobsend, iinf, iloc])
+
+    minerr = np.min(prior_err)
+    inds = np.where(prior_err == minerr)
+    print('min prior error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(minerr, inflation_values[inds[0][0]], localization_values[inds[1][0]]))
+    minerr = np.min(analy_err)
+    inds = np.where(analy_err == minerr)
+    ind = inds[0][0]
+    print('min analy error = {0:.6f}, inflation = {1:.3f}, localizaiton = {1:d}'.format(minerr, inflation_values[inds[0][0]], localization_values[inds[1][0]]))
 
     # save
     np.save('prior_rmse.npy', prior_rmse)
