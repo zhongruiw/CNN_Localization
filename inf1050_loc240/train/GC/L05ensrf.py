@@ -56,7 +56,7 @@ def ensrf(ztruth, zics_total, zobs_total):
     ensemble_size = 40
     ens_mem_beg = 1
     ens_mem_end = ens_mem_beg + ensemble_size
-    inflation_values = [1.0,1.01,1.02,1.03,1.04,1.05]
+    inflation_values = [1.025] #[1.0,1.01,1.02,1.03,1.04,1.05]
     ninf = len(inflation_values)
     localization_values = [240]
     nloc = len(localization_values)

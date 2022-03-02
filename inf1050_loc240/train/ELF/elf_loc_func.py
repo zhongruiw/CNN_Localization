@@ -1,7 +1,7 @@
 # ----- elf localization funcation -----
 # coding by Zhongrui Wang
-# version: 2.2
-# update: git repo; allow deflation; fix bug, distance 481,not 480
+# version: 2.5
+# update: multiple inf,loc;git repo; allow deflation; fix bug, distance 481,not 480
 
 import sys 
 sys.path.append('/home/lllei/AI_localization/L05/git_repo/general')
@@ -76,7 +76,7 @@ def ensrf(ztruth, zics_total, zobs_total):
     ens_mem_beg = 1
     ens_mem_end = ens_mem_beg + ensemble_size
 
-    inflation_value = 1.0
+    inflation_value = 0.4
     localize = 1
     localization_value = 240
     # -------------------------------------------------------------------------------
@@ -184,9 +184,10 @@ def ensrf(ztruth, zics_total, zobs_total):
 
         zobs = np.mat(zobs_total[iassim, :])
 
-        ensmean = np.mean(zens, axis=0)
-        ensp = zens - ensmean
-        zens = ensmean + ensp * inflation_value
+        # # inflation RTPP
+        # ensmean = np.mean(zens, axis=0)
+        # ensp = zens - ensmean
+        # zens = ensmean + ensp * inflation_value
 
         # save inflated prior zens
         zens_prior = zens
@@ -208,10 +209,17 @@ def ensrf(ztruth, zics_total, zobs_total):
             inc_t = np.append(inc_t, iinc_t, axis=0)
             inc_p = np.append(inc_p, iinc_p, axis=0)
 
-            # serial EnSRF update
+        # serial EnSRF update
         zens = EAKF_wzr(1, model_size, ensemble_size, ensemble_size,
                         nobsgrid, zens, zens, Hk, obs_error_var, localize, CMat, zobs)
 
+        # inflation RTPS
+        std_prior = np.std(zens_prior, axis=0, ddof=1)
+        std_analy = np.std(zens, axis=0, ddof=1)
+        ensmean = np.mean(zens, axis=0)
+        ensp = zens - ensmean
+        zens = ensmean + np.multiply(ensp, (1 + inflation_value*(std_prior-std_analy)/std_analy))
+       
         # save zens_analy_kg_f
         zens_analy_kg_f = np.mean(zens, axis=0)
         zeakf_analy[:, iassim] = zens_analy_kg_f
