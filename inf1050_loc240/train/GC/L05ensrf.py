@@ -1,7 +1,7 @@
 # ----- L05ensrf  -----
 # coding by Zhongrui Wang
-# version: 1.2
-# update: multiple inf,loc; git repo; allow deflation
+# version: 1.5
+# update: add rtps inf; multiple inf,loc; git repo; allow deflation
 
 import sys 
 sys.path.append('/home/lllei/AI_localization/L05/git_repo/general')
@@ -18,15 +18,15 @@ from step_L04 import step_L04
 data_dir = '/scratch/lllei/data'
 # data_dir = '/Users/ree/Documents/DataAssimilization/hybrid_L05/data'
 icsfname = pjoin(data_dir, 'ics_ms3_from_zt1year_sz3001.mat')
-obsfname = pjoin(data_dir, 'obs_ms3_err1_240s_6h.mat')
-truthfname = pjoin(data_dir, 'zt_1year_ms3.mat')
+obsfname = pjoin(data_dir, 'obs_ms3_err1_960s_6h_25y.mat')
+truthfname = pjoin(data_dir, 'zt_25year_ms3_6h.mat')
 
 # get truth
 time_steps = 200 * 360  # 360 days(1 day~ 200 time steps)
 obs_freq_timestep = 50
-obsdens = 4
+obsdens = 1
 truthf = loadmat(truthfname)
-ztruth = truthf['Zt'][0:time_steps+1, :]
+ztruth = truthf['zens_times'][0:int(time_steps/obs_freq_timestep+1), :]
 
 # get initial condition
 icsf = loadmat(icsfname)
@@ -36,7 +36,7 @@ zics_total = icsf['zics_total1']
 obsf = loadmat(obsfname)
 zobs_total = obsf['zobs_total'][0:int(time_steps/obs_freq_timestep+1), :]  # 360 days
 
-zt = ztruth[0::obs_freq_timestep, obsdens-1::obsdens]
+zt = ztruth[:, obsdens-1::obsdens]
 print('truth shape:', np.shape(zt))
 print('observations error std:', np.std(zt-zobs_total))
 
@@ -56,9 +56,9 @@ def ensrf(ztruth, zics_total, zobs_total):
     ensemble_size = 40
     ens_mem_beg = 1
     ens_mem_end = ens_mem_beg + ensemble_size
-    inflation_values = [1.025] #[1.0,1.01,1.02,1.03,1.04,1.05]
+    inflation_values = [0.05, 0.1, 0.2] #[1.0,1.01,1.02,1.03,1.04,1.05]
     ninf = len(inflation_values)
-    localization_values = [240]
+    localization_values = [240,480]
     nloc = len(localization_values)
     localize = 1
     localize_inde = 1
@@ -86,7 +86,7 @@ def ensrf(ztruth, zics_total, zobs_total):
 
     # -------------------------------------------------------------------------------
     # observation parameters
-    obs_density = 4
+    obs_density = obsdens
     obs_error_var = 1.0
 
     # regular temporal / sptial obs
@@ -210,7 +210,7 @@ def ensrf(ztruth, zics_total, zobs_total):
                         zens = step_L04(ensemble_size, zens, model_size, ss2, smooth_steps, a, model_number, K4, H, K, K2, sts2, coupling,
                                          space_time_scale, forcing, delta_t)
                     
-            zt = ztruth[0: time_steps + 1: obs_freq_timestep, :].T
+            zt = ztruth.T
             prior_rmse[:, iinf, iloc] = np.sqrt(np.mean((zt - zeakf_prior) ** 2, axis=0))
             analy_rmse[:, iinf, iloc] = np.sqrt(np.mean((zt - zeakf_analy) ** 2, axis=0))
             prior_spread_rmse[:, iinf, iloc] = np.sqrt(np.mean(prior_spread ** 2, axis=0))
@@ -218,14 +218,6 @@ def ensrf(ztruth, zics_total, zobs_total):
 
             prior_err[iinf, iloc] = np.mean(prior_rmse[iobsbeg - 1: iobsend, iinf, iloc])
             analy_err[iinf, iloc] = np.mean(analy_rmse[iobsbeg - 1: iobsend, iinf, iloc])
-
-    minerr = np.min(prior_err)
-    inds = np.where(prior_err == minerr)
-    print('min prior error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(minerr, inflation_values[inds[0][0]], localization_values[inds[1][0]]))
-    minerr = np.min(analy_err)
-    inds = np.where(analy_err == minerr)
-    ind = inds[0][0]
-    print('min analy error = {0:.6f}, inflation = {1:.3f}, localizaiton = {1:d}'.format(minerr, inflation_values[inds[0][0]], localization_values[inds[1][0]]))
 
     # save
     np.save('prior_rmse.npy', prior_rmse)
@@ -247,6 +239,17 @@ def ensrf(ztruth, zics_total, zobs_total):
     np.save('zeakf_analy.npy', zeakf_analy)
     # # np.save('zeakf_analy_adm.npy', zeakf_analy_adm)
     # np.save('zeakf_analy_inde.npy', zeakf_analy_inde)
+
+    minerr = np.min(prior_err)
+    inds = np.where(prior_err == minerr)
+    print('min prior error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(minerr, inflation_values[inds[0][0]], localization_values[inds[1][0]]))
+    minerr = np.min(analy_err)
+    inds = np.where(analy_err == minerr)
+    ind = inds[0][0]
+    print('min analy error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(minerr, inflation_values[inds[0][0]], localization_values[inds[1][0]]))
+
+    # print('prior error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(prior_err[0,0], inflation_values[0], localization_values[0]))
+    # print('analy error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(analy_err[0,0], inflation_values[0], localization_values[0]))
 
     return prior_err
 

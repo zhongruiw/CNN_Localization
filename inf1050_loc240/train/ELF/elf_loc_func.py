@@ -260,8 +260,8 @@ def ensrf(ztruth, zics_total, zobs_total):
 
     # save
     np.save('elf.npy', elf)
-    np.save('/scratch/lllei/inf1050_loc240/train/elf/inf1000/inc_t.npy', inc_t)
-    np.save('/scratch/lllei/inf1050_loc240/train/elf/inf1000/inc_p.npy', inc_p)
+    np.save('/scratch/lllei/inf1050_loc240/train/elf/rtps/inc_t.npy', inc_t)
+    np.save('/scratch/lllei/inf1050_loc240/train/elf/rtps/inc_p.npy', inc_p)
     np.save('prior_rmse.npy', prior_rmse)
     np.save('analy_rmse.npy', analy_rmse)
     np.save('prior_spread_rmse.npy', prior_spread_rmse)
@@ -270,6 +270,7 @@ def ensrf(ztruth, zics_total, zobs_total):
     return prior_err
 
 
+# return x, y index in model space
 @jit(nopython=True)
 def covind(d, p, obs_density, model_size):
     if obs_density * p + obs_density - 1 + d > model_size - 1:

@@ -1,11 +1,10 @@
 # ----- L05ensrf for elf localization -----
 # coding by Zhongrui Wang
-# version: 2.2
-# update: git repo; fix bug 481
+# version: 2.5
+# update: add rtps inf; git repo; fix bug 481
 
 import sys 
 sys.path.append('/home/lllei/AI_localization/L05/git_repo/general')
-sys.path.append('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240/train/ai/CNN/Loss_xt/SRCNN_Dong/tune/219_21_5')
 
 import numpy as np
 from construct_GC_2d import construct_GC_2d
@@ -15,9 +14,7 @@ from os.path import dirname, join as pjoin
 from scipy.io import loadmat
 from step_L04 import step_L04
 # import matplotlib.pyplot as plt
-
 # import time
-# import sys
 
 
 data_dir = '/scratch/lllei/data'
@@ -59,22 +56,19 @@ def ensrf(ztruth, zics_total, zobs_total):
     # -------------------------------------------------------------------------------
     # eakf parameters
     ensemble_size = 40
-    # adm_ensemble_size = 980
     inde_ensemble_size = 40
     ens_mem_beg = 1
     ens_mem_end = ens_mem_beg + ensemble_size
-    # adm_ens_mem_beg = ens_mem_end
-    # adm_ens_mem_end = adm_ens_mem_beg + adm_ensemble_size
     inde_ens_mem_beg = 1
     inde_ens_mem_end = inde_ens_mem_beg + inde_ensemble_size
     
-    inflation_value = 1.0
-    inflation_value_inde = 1.0
+    inflation_value = 0.4
+    inflation_value_inde = 0.4
     localize = 1
     localization_value = 240
     localize_inde = 1
     # localization_value_inde = 120
-    elff = np.load('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240/train/elf/distance_only/debug_481/tune_inf/inf1000/elf_ztest.npy')
+    elff = np.load('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240/train/elf/distance_only/debug_481/rtps/elf_ztest.npy')
     localize_inde_func = np.concatenate((elff, elff[-2:0:-1]), axis=0)
     # -------------------------------------------------------------------------------
 
@@ -153,22 +147,8 @@ def ensrf(ztruth, zics_total, zobs_total):
     # CMat_state = np.mat(construct_GC_2d(localization_value, model_size, model_grids))
 
     zens = np.mat(zics_total[ens_mem_beg: ens_mem_end, :])  # ensemble are drawn from ics set
-    # zens_adm = zics_total[adm_ens_mem_beg: adm_ens_mem_end, :]
     zens_inde = np.mat(zics_total[inde_ens_mem_beg: inde_ens_mem_end, :])
 
-
-    # save settings
-    # save_interval = 10
-    # save_num = int(time_steps / save_interval)
-    # kg_f = np.zeros((save_num, model_size, nobsgrid))
-    # kg_t = np.zeros((save_num, model_size, nobsgrid))
-    # pb_f = np.zeros((save_num, model_size, model_size))
-    # pb_t = np.zeros((save_num, model_size, model_size))
-    # isave = 0
-
-    # analy_err_kg_f = np.zeros(nobstime)
-    # analy_err_kg_t = np.zeros(nobstime)
-    # analy_err_gc = np.zeros(nobstime)
     prior_spread = np.zeros((model_size, nobstime))
     analy_spread = np.zeros((model_size, nobstime))
     prior_spread_inde = np.zeros((model_size, nobstime))
@@ -195,14 +175,14 @@ def ensrf(ztruth, zics_total, zobs_total):
 
         zobs = np.mat(zobs_total[iassim, :])
 
-        # inflation
-        ensmean = np.mean(zens, axis=0)
-        ensp = zens - ensmean
-        zens = ensmean + ensp * inflation_value
+        # inflation RTPP
+        # ensmean = np.mean(zens, axis=0)
+        # ensp = zens - ensmean
+        # zens = ensmean + ensp * inflation_value
 
-        ensmean_inde = np.mean(zens_inde, axis=0)
-        ensp_inde = zens_inde - ensmean_inde
-        zens_inde = ensmean_inde + ensp_inde * inflation_value_inde
+        # ensmean_inde = np.mean(zens_inde, axis=0)
+        # ensp_inde = zens_inde - ensmean_inde
+        # zens_inde = ensmean_inde + ensp_inde * inflation_value_inde
 
         # save inflated prior zens
         zens_prior = zens
@@ -215,6 +195,19 @@ def ensrf(ztruth, zics_total, zobs_total):
         zens_inde = EAKF_wzr(1, model_size, inde_ensemble_size, inde_ensemble_size,
                              nobsgrid, zens_inde, zens_inde, Hk, obs_error_var, localize_inde, CMat_inde, zobs)
 
+        # inflation RTPS
+        std_prior = np.std(zens_prior, axis=0, ddof=1)
+        std_analy = np.std(zens, axis=0, ddof=1)
+        ensmean = np.mean(zens, axis=0)
+        ensp = zens - ensmean
+        zens = ensmean + np.multiply(ensp, (1 + inflation_value*(std_prior-std_analy)/std_analy))
+       
+        std_prior = np.std(zens_inde_prior, axis=0, ddof=1)
+        std_analy = np.std(zens_inde, axis=0, ddof=1)
+        ensmean = np.mean(zens_inde, axis=0)
+        ensp = zens_inde - ensmean
+        zens_inde = ensmean + np.multiply(ensp, (1 + inflation_value*(std_prior-std_analy)/std_analy))
+       
         # save zens_analy_kg_f
         zens_analy_kg_f = np.mean(zens, axis=0)
         zeakf_analy[:, iassim] = zens_analy_kg_f
