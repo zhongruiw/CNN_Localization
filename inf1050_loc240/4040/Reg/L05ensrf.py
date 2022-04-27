@@ -70,8 +70,8 @@ def ensrf(ztruth, zics_total, zobs_total):
     localization_value = 240
     localize_inde = 1
     # localization_value_inde = 120
-    localize_inde_func = np.load('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240/train/reg/2d/reg_2d_beta.npy')
-
+    betaa = np.load('/home/lllei/AI_localization/L05/F15/singlobs/train/reg/debug_481/without_res/reg_smsp.npy')
+    localize_inde_func = np.concatenate((betaa, betaa[-2:0:-1]), axis=0)
     # -------------------------------------------------------------------------------
 
     # -------------------------------------------------------------------------------
@@ -142,14 +142,14 @@ def ensrf(ztruth, zics_total, zobs_total):
     # -------------------------------------------------------------------------------
     
     CMat = np.mat(construct_GC_2d(localization_value, model_size, obs_grids))
-    CMat_inde = np.mat(localize_inde_func.T)
+    CMat_inde = np.mat(construct_func_2d(localize_inde_func, model_size, obs_grids))
+    # CMat_inde = np.mat(localize_inde_func.T)
     # cmat = np.array(CMat)
     # cmat_inde = np.array(CMat_inde)
     # CMat_state = np.mat(construct_GC_2d(localization_value, model_size, model_grids))
 
     zens = np.mat(zics_total[ens_mem_beg: ens_mem_end, :])  # ensemble are drawn from ics set
     zens_inde = np.mat(zics_total[inde_ens_mem_beg: inde_ens_mem_end, :])
-
 
     # save settings
     # save_interval = 10
@@ -189,14 +189,14 @@ def ensrf(ztruth, zics_total, zobs_total):
 
         zobs = np.mat(zobs_total[iassim, :])
 
-        if inflation_value > 1.0:
-            ensmean = np.mean(zens, axis=0)
-            ensp = zens - ensmean
-            zens = ensmean + ensp * inflation_value
+        # const multi inflation
+        ensmean = np.mean(zens, axis=0)
+        ensp = zens - ensmean
+        zens = ensmean + ensp * inflation_value
 
-            ensmean_inde = np.mean(zens_inde, axis=0)
-            ensp_inde = zens_inde - ensmean_inde
-            zens_inde = ensmean_inde + ensp_inde * inflation_value_inde
+        ensmean_inde = np.mean(zens_inde, axis=0)
+        ensp_inde = zens_inde - ensmean_inde
+        zens_inde = ensmean_inde + ensp_inde * inflation_value_inde
 
         # save inflated prior zens
         zens_prior = zens
@@ -258,9 +258,9 @@ def ensrf(ztruth, zics_total, zobs_total):
     
     # save
     np.save('prior_rmse_gc240.npy', prior_rmse)
-    np.save('prior_rmse_reg_2d.npy', prior_indeself_rmse)
+    np.save('prior_rmse_reg.npy', prior_indeself_rmse)
     np.save('analy_rmse_gc240.npy', analy_rmse)
-    np.save('analy_rmse_reg_2d.npy', analy_indeself_rmse)
+    np.save('analy_rmse_reg.npy', analy_indeself_rmse)
     # np.save('kg_f_1y.npy', kg_f)
     # np.save('kg_t_1y.npy', kg_t)
     # np.save('pb_f_1y.npy', pb_f)

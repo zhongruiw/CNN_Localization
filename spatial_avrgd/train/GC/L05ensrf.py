@@ -18,13 +18,13 @@ from step_L04 import step_L04
 data_dir = '/scratch/lllei/data'
 # data_dir = '/Users/ree/Documents/DataAssimilization/hybrid_L05/data'
 icsfname = pjoin(data_dir, 'ics_ms3_from_zt1year_sz3001.mat')
-obsfname = pjoin(data_dir, 'obs_ms3_err1_960s_6h_25y.mat')
-truthfname = pjoin(data_dir, 'zt_25year_ms3_6h.mat')
+obsfname = pjoin(data_dir, 'obs_ms3_err1_240s_6h_5y_sptavd025.mat')
+truthfname = pjoin(data_dir, 'zt_5year_ms3_6h.mat')
 
 # get truth
-time_steps = 200 * 360  # 360 days(1 day~ 200 time steps)
+time_steps = 200 * 360 # 360 days(1 day~ 200 time steps)
 obs_freq_timestep = 50
-obsdens = 1
+obsdens = 4
 truthf = loadmat(truthfname)
 ztruth = truthf['zens_times'][0:int(time_steps/obs_freq_timestep+1), :]
 
@@ -36,7 +36,37 @@ zics_total = icsf['zics_total1']
 obsf = loadmat(obsfname)
 zobs_total = obsf['zobs_total'][0:int(time_steps/obs_freq_timestep+1), :]  # 360 days
 
-zt = ztruth[:, obsdens-1::obsdens]
+# zt = ztruth[:, obsdens-1::obsdens]
+
+# model parameters
+model_size = 960  # N
+# observation parameters
+obs_density = obsdens
+
+# regular temporal / sptial obs
+model_grids = np.arange(1, model_size + 1)
+obs_grids = model_grids[model_grids % obs_density == 0]
+nobsgrid = len(obs_grids)
+
+# make forward operator H
+Hk = np.mat(np.zeros((nobsgrid, model_size)))
+ave_range = 0.25 * model_size
+if ave_range % 2 != 0:
+    raise ValueError('average range * model_size should be an even number')
+else:
+    for iobs in range(0, nobsgrid):
+        x1 = obs_grids[iobs] - 1
+        if x1+int(ave_range/2)+1 > model_size:
+            Hk[iobs, x1-int(ave_range/2):model_size] = 1.0 / (ave_range+1)
+            Hk[iobs, 0:x1+int(ave_range/2)+1-model_size] = 1.0 / (ave_range+1)
+        elif x1-int(ave_range/2) < 0:
+            Hk[iobs, 0:x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
+            Hk[iobs, x1-int(ave_range/2):] = 1.0 / (ave_range+1)        
+        else:
+            Hk[iobs, x1-int(ave_range/2):x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
+
+zt = ztruth @ Hk.T
+
 print('truth shape:', np.shape(zt))
 print('observations error std:', np.std(zt-zobs_total))
 
@@ -56,12 +86,12 @@ def ensrf(ztruth, zics_total, zobs_total):
     ensemble_size = 40
     ens_mem_beg = 1
     ens_mem_end = ens_mem_beg + ensemble_size
-    inflation_values = [0.05, 0.1, 0.2] #[1.0,1.01,1.02,1.03,1.04,1.05]
+    inflation_values = [1.05,1.075,1.1]
     ninf = len(inflation_values)
-    localization_values = [240,480]
+    localization_values = [600,720,840]
     nloc = len(localization_values)
     localize = 1
-    localize_inde = 1
+    # localize_inde = 1
     # -------------------------------------------------------------------------------
 
     # -------------------------------------------------------------------------------
@@ -72,7 +102,7 @@ def ensrf(ztruth, zics_total, zobs_total):
     # -------------------------------------------------------------------------------
     # model parameters
     model_size = 960  # N
-    forcing = 15.00  # F
+    forcing = 16.00  # F
     space_time_scale = 10.00  # b
     coupling = 3.00  # c
     smooth_steps = 12  # I
@@ -86,7 +116,7 @@ def ensrf(ztruth, zics_total, zobs_total):
 
     # -------------------------------------------------------------------------------
     # observation parameters
-    obs_density = 1
+    obs_density = obsdens
     obs_error_var = 1.0
 
     # regular temporal / sptial obs
@@ -98,9 +128,24 @@ def ensrf(ztruth, zics_total, zobs_total):
 
     # make forward operator H
     Hk = np.mat(np.zeros((nobsgrid, model_size)))
-    for iobs in range(0, nobsgrid):
-        x1 = obs_grids[iobs] - 1
-        Hk[iobs, x1] = 1.0
+    # for iobs in range(0, nobsgrid):
+    #     x1 = obs_grids[iobs] - 1
+    #     Hk[iobs, x1] = 1.0
+
+    ave_range = 0.25 * model_size
+    if ave_range % 2 != 0:
+        raise ValueError('average range * model_size should be an even number')
+    else:
+        for iobs in range(0, nobsgrid):
+            x1 = obs_grids[iobs] - 1
+            if x1+int(ave_range/2)+1 > model_size:
+                Hk[iobs, x1-int(ave_range/2):model_size] = 1.0 / (ave_range+1)
+                Hk[iobs, 0:x1+int(ave_range/2)+1-model_size] = 1.0 / (ave_range+1)
+            elif x1-int(ave_range/2) < 0:
+                Hk[iobs, 0:x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
+                Hk[iobs, x1-int(ave_range/2):] = 1.0 / (ave_range+1)        
+            else:
+                Hk[iobs, x1-int(ave_range/2):x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
 
     model_times = np.arange(0, time_steps + 1)
     obs_times = model_times[model_times % obs_freq_timestep == 0]
@@ -170,10 +215,10 @@ def ensrf(ztruth, zics_total, zobs_total):
 
                 zobs = np.mat(zobs_total[iassim, :])
 
-                # # inflation RTPP
-                # ensmean = np.mean(zens, axis=0)
-                # ensp = zens - ensmean
-                # zens = ensmean + ensp * inflation_value
+                # inflation RTPP
+                ensmean = np.mean(zens, axis=0)
+                ensp = zens - ensmean
+                zens = ensmean + ensp * inflation_value
 
                 # save inflated prior zens
                 zens_prior = zens
@@ -182,12 +227,12 @@ def ensrf(ztruth, zics_total, zobs_total):
                 zens = EAKF_wzr(1, model_size, ensemble_size, ensemble_size,
                                 nobsgrid, zens, zens, Hk, obs_error_var, localize, CMat, zobs)
 
-                # inflation RTPS
-                std_prior = np.std(zens_prior, axis=0, ddof=1)
-                std_analy = np.std(zens, axis=0, ddof=1)
-                ensmean = np.mean(zens, axis=0)
-                ensp = zens - ensmean
-                zens = ensmean + np.multiply(ensp, (1 + inflation_value*(std_prior-std_analy)/std_analy))
+                # # inflation RTPS
+                # std_prior = np.std(zens_prior, axis=0, ddof=1)
+                # std_analy = np.std(zens, axis=0, ddof=1)
+                # ensmean = np.mean(zens, axis=0)
+                # ensp = zens - ensmean
+                # zens = ensmean + np.multiply(ensp, (1 + inflation_value*(std_prior-std_analy)/std_analy))
                
                 # save zens_analy_kg_f
                 zens_analy_kg_f = np.mean(zens, axis=0)

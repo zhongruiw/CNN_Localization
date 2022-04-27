@@ -21,7 +21,7 @@ from step_L04 import step_L04
 data_dir = '/scratch/lllei/data'
 # data_dir = '/Users/ree/Documents/DataAssimilization/AI_localization/L05/data'
 icsfname = pjoin(data_dir, 'ics_ms3_from_zt1year_sz3001.mat')
-obsfname = pjoin(data_dir, 'obs_ms3_err1_240s_6h_5y.mat')
+obsfname = pjoin(data_dir, 'obs_ms3_err1_240s_6h_5y_sptavd025.mat')
 # truobsfname = pjoin(data_dir, 'truth_ms3_240s_6h_5y.mat')
 truthfname = pjoin(data_dir, 'zt_5year_ms3_6h.mat')
 
@@ -30,7 +30,7 @@ time_steps = 200 * 360 * 5  # 360 days(1 day~ 200 time steps)
 obs_freq_timestep = 50
 obsdens = 4
 truthf = loadmat(truthfname)
-ztruth = truthf['zens_times']
+ztruth = truthf['zens_times'][0:int(time_steps/obs_freq_timestep+1), :]
 
 # get initial condition
 icsf = loadmat(icsfname)
@@ -44,7 +44,6 @@ zobs_total = obsf['zobs_total'][0:int(time_steps / obs_freq_timestep + 1), :]  #
 model_size = 960  # N
 # observation parameters
 obs_density = 4
-obs_error_var = 1.0
 
 # regular temporal / sptial obs
 model_grids = np.arange(1, model_size + 1)
@@ -53,9 +52,24 @@ nobsgrid = len(obs_grids)
 
 # make forward operator H
 Hk = np.mat(np.zeros((nobsgrid, model_size)))
-for iobs in range(0, nobsgrid):
-    x1 = obs_grids[iobs] - 1
-    Hk[iobs, x1] = 1.0
+# for iobs in range(0, nobsgrid):
+#     x1 = obs_grids[iobs] - 1
+#     Hk[iobs, x1] = 1.0
+
+ave_range = 0.25 * model_size
+if ave_range % 2 != 0:
+    raise ValueError('average range * model_size should be an even number')
+else:
+    for iobs in range(0, nobsgrid):
+        x1 = obs_grids[iobs] - 1
+        if x1+int(ave_range/2)+1 > model_size:
+            Hk[iobs, x1-int(ave_range/2):model_size] = 1.0 / (ave_range+1)
+            Hk[iobs, 0:x1+int(ave_range/2)+1-model_size] = 1.0 / (ave_range+1)
+        elif x1-int(ave_range/2) < 0:
+            Hk[iobs, 0:x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
+            Hk[iobs, x1-int(ave_range/2):] = 1.0 / (ave_range+1)        
+        else:
+            Hk[iobs, x1-int(ave_range/2):x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
 
 zt = ztruth @ Hk.T
 print('truth shape:', np.shape(zt))
@@ -77,10 +91,10 @@ def ensrf(ztruth, zics_total, zobs_total):
     ens_mem_beg = 1
     ens_mem_end = ens_mem_beg + ensemble_size
 
-    inflation_value = 0.1
+    inflation_value = 1.01
     localize = 1
-    localization_value = 240
-    elff = np.load('../iter0/elf_ztest.npy')
+    # localization_value = 600
+    elff = np.load('../iter0/elf_smsp.npy')
     localize_func = np.concatenate((elff, elff[-2:0:-1]), axis=0)
     # -------------------------------------------------------------------------------
 
@@ -118,9 +132,24 @@ def ensrf(ztruth, zics_total, zobs_total):
 
     # make forward operator H
     Hk = np.mat(np.zeros((nobsgrid, model_size)))
-    for iobs in range(0, nobsgrid):
-        x1 = obs_grids[iobs] - 1
-        Hk[iobs, x1] = 1.0
+    # for iobs in range(0, nobsgrid):
+    #     x1 = obs_grids[iobs] - 1
+    #     Hk[iobs, x1] = 1.0
+
+    ave_range = 0.25 * model_size
+    if ave_range % 2 != 0:
+        raise ValueError('average range * model_size should be an even number')
+    else:
+        for iobs in range(0, nobsgrid):
+            x1 = obs_grids[iobs] - 1
+            if x1+int(ave_range/2)+1 > model_size:
+                Hk[iobs, x1-int(ave_range/2):model_size] = 1.0 / (ave_range+1)
+                Hk[iobs, 0:x1+int(ave_range/2)+1-model_size] = 1.0 / (ave_range+1)
+            elif x1-int(ave_range/2) < 0:
+                Hk[iobs, 0:x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
+                Hk[iobs, x1-int(ave_range/2):] = 1.0 / (ave_range+1)        
+            else:
+                Hk[iobs, x1-int(ave_range/2):x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
 
     model_times = np.arange(0, time_steps + 1)
     obs_times = model_times[model_times % obs_freq_timestep == 0]
@@ -173,8 +202,8 @@ def ensrf(ztruth, zics_total, zobs_total):
 
     ibegin = 100  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    inc_p = np.empty((0, int(model_size / 2)+1))
-    inc_t = np.empty((0, int(model_size / 2)+1))
+    # inc_p = np.empty((0, int(model_size / 2)+1))
+    # inc_t = np.empty((0, int(model_size / 2)+1))
 
     for iassim in range(0, nobstime):
         print(iassim)
@@ -187,10 +216,10 @@ def ensrf(ztruth, zics_total, zobs_total):
 
         zobs = np.mat(zobs_total[iassim, :])
 
-        # # inflation RTPP
-        # ensmean = np.mean(zens, axis=0)
-        # ensp = zens - ensmean
-        # zens = ensmean + ensp * inflation_value
+        # const multi inflation
+        ensmean = np.mean(zens, axis=0)
+        ensp = zens - ensmean
+        zens = ensmean + ensp * inflation_value
 
         # save inflated prior zens
         zens_prior = zens
@@ -207,21 +236,21 @@ def ensrf(ztruth, zics_total, zobs_total):
 
             zt = np.array(ztruth[iassim, :])
             zp = np.squeeze(np.array(zens_prior_mean))
-            nume, deno, iinc_t, iinc_p = addelf(nume, deno, zt, zp,
+            nume, deno = addelf(nume, deno, zt, zp,
                                                 model_size, nobsgrid, obs_density, obs_error_var, Pb, Hk)
-            inc_t = np.append(inc_t, iinc_t, axis=0)
-            inc_p = np.append(inc_p, iinc_p, axis=0)
+            # inc_t = np.append(inc_t, iinc_t, axis=0)
+            # inc_p = np.append(inc_p, iinc_p, axis=0)
 
         # serial EnSRF update
         zens = EAKF_wzr(1, model_size, ensemble_size, ensemble_size,
                         nobsgrid, zens, zens, Hk, obs_error_var, localize, CMat, zobs)
 
-        # inflation RTPS
-        std_prior = np.std(zens_prior, axis=0, ddof=1)
-        std_analy = np.std(zens, axis=0, ddof=1)
-        ensmean = np.mean(zens, axis=0)
-        ensp = zens - ensmean
-        zens = ensmean + np.multiply(ensp, (1 + inflation_value*(std_prior-std_analy)/std_analy))
+        # # inflation RTPS
+        # std_prior = np.std(zens_prior, axis=0, ddof=1)
+        # std_analy = np.std(zens, axis=0, ddof=1)
+        # ensmean = np.mean(zens, axis=0)
+        # ensp = zens - ensmean
+        # zens = ensmean + np.multiply(ensp, (1 + inflation_value*(std_prior-std_analy)/std_analy))
        
         # save zens_analy_kg_f
         zens_analy_kg_f = np.mean(zens, axis=0)
@@ -263,8 +292,8 @@ def ensrf(ztruth, zics_total, zobs_total):
 
     # save
     np.save('elf.npy', elf)
-    np.save('/scratch/lllei/inf1050_loc240/train/elf/rtps/successive/iter1/inc_t.npy', inc_t)
-    np.save('/scratch/lllei/inf1050_loc240/train/elf/rtps/successive/iter1/inc_p.npy', inc_p)
+    # np.save('/scratch/lllei/inf1050_loc240/train/elf/rtps/successive/iter1/inc_t.npy', inc_t)
+    # np.save('/scratch/lllei/inf1050_loc240/train/elf/rtps/successive/iter1/inc_p.npy', inc_p)
     np.save('prior_rmse.npy', prior_rmse)
     np.save('analy_rmse.npy', analy_rmse)
     np.save('prior_spread_rmse.npy', prior_spread_rmse)
@@ -287,8 +316,8 @@ def covind(d, p, obs_density, model_size):
 
 @jit(nopython=True)
 def addelf(nume, deno, zt, zp, model_size, nobsgrid, obs_density, obs_error_var, Pb, Hk):
-    iinc_t = np.zeros((int(nobsgrid * 2), int(model_size / 2)+1))
-    iinc_p = np.zeros((int(nobsgrid * 2), int(model_size / 2)+1))
+    # iinc_t = np.zeros((int(nobsgrid * 2), int(model_size / 2)+1))
+    # iinc_p = np.zeros((int(nobsgrid * 2), int(model_size / 2)+1))
     for iob in range(0, nobsgrid):
         hk = Hk[iob, :]
         hPht = hk @ Pb @ hk.T
@@ -303,19 +332,19 @@ def addelf(nume, deno, zt, zp, model_size, nobsgrid, obs_density, obs_error_var,
                 nume[model_size - d] = nume[model_size - d] + (zt[ix] - zp[ix]) * reg[ix] * kg * (yt - yp)
                 deno[model_size - d] = deno[model_size - d] + reg[ix] ** 2 * kg ** 2 * (
                             (yt ** 2 + obs_error_var) - 2 * yt * yp + yp ** 2)
-                iinc_t[iob + nobsgrid, model_size - d] = zt[ix] - zp[ix]
-                iinc_p[iob + nobsgrid, model_size - d] = reg[ix] * kg * (yt - yp)
+                # iinc_t[iob + nobsgrid, model_size - d] = zt[ix] - zp[ix]
+                # iinc_p[iob + nobsgrid, model_size - d] = reg[ix] * kg * (yt - yp)
             else:
                 nume[d] = nume[d] + (zt[ix] - zp[ix]) * reg[ix] * kg * (yt - yp)
                 deno[d] = deno[d] + reg[ix] ** 2 * kg ** 2 * ((yt ** 2 + obs_error_var) - 2 * yt * yp + yp ** 2)
-                iinc_t[iob, d] = zt[ix] - zp[ix]
-                iinc_p[iob, d] = reg[ix] * kg * (yt - yp)
-        iinc_p[nobsgrid:nobsgrid*2,0] = iinc_p[0:nobsgrid,0]
-        iinc_t[nobsgrid:nobsgrid*2,0] = iinc_t[0:nobsgrid,0]
-        iinc_p[nobsgrid:nobsgrid*2,-1] = iinc_p[0:nobsgrid,-1]
-        iinc_t[nobsgrid:nobsgrid*2,-1] = iinc_t[0:nobsgrid,-1]
+        #         iinc_t[iob, d] = zt[ix] - zp[ix]
+        #         iinc_p[iob, d] = reg[ix] * kg * (yt - yp)
+        # iinc_p[nobsgrid:nobsgrid*2,0] = iinc_p[0:nobsgrid,0]
+        # iinc_t[nobsgrid:nobsgrid*2,0] = iinc_t[0:nobsgrid,0]
+        # iinc_p[nobsgrid:nobsgrid*2,-1] = iinc_p[0:nobsgrid,-1]
+        # iinc_t[nobsgrid:nobsgrid*2,-1] = iinc_t[0:nobsgrid,-1]
 
-    return nume, deno, iinc_t, iinc_p
+    return nume, deno
 
 
 err = ensrf(ztruth, zics_total, zobs_total)

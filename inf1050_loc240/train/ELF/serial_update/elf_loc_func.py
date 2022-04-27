@@ -1,7 +1,7 @@
 # ----- elf localization funcation -----
 # coding by Zhongrui Wang
-# version: 2.5
-# update: multiple inf,loc;git repo; allow deflation; fix bug, distance 481,not 480
+# version: 2.6
+# update: serial update elf
 
 import sys
 
