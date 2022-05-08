@@ -361,7 +361,7 @@ def ensrf(ztruth, zics_total, zobs_total):
     # np.save('zeakf_prior_indeself.npy', zeakf_prior_indeself)
     # np.save('zeakf_analy_indeself.npy', zeakf_analy_indeself)
 
-    return prior_indeself_err
+    return prior_err
 
 
 err = ensrf(ztruth, zics_total, zobs_total)
