@@ -1,7 +1,10 @@
 import numpy as np
 from numba import jit
 from numba import prange
+from scipy.linalg import sqrtm
+from numpy.linalg import inv
 # from time import time
+from scipy.io import savemat
 
 
 def EAKF_wzr(serial_update, model_size, ensemble_size, adm_ensemble_size, nobsgrid, zens, zens_adm, Hk, obs_error_var, localize, CMat, zobs, **kwargs):
@@ -93,37 +96,34 @@ def EAKF_wzr(serial_update, model_size, ensemble_size, adm_ensemble_size, nobsgr
         # return np.mat(zens)
         return zens, zpmeans, phts, hphts
 
+    # matrix assimilate time lagged observations
     if serial_update == 2:
+        nobsgrid_l = int(nobsgrid*zens.shape[0])
+        R  = obs_error_var * np.eye(nobsgrid_l, nobsgrid_l)
         rn = 1.0 / (ensemble_size - 1)
-        for iobs in range(0, nobsgrid):
-            xmean = np.mean(zens, axis=0)  # 1xn
-            xprime = zens - xmean
-            hxens = (Hk[iobs, :] * zens.T).T  # 40*1
-            hxmean = np.mean(hxens, axis=0)
-            hxprime = hxens - hxmean
-            hpbht = (hxprime.T * hxprime * rn)[0, 0]
-            gainfact = (hpbht + obs_error_var) / hpbht * (1.0 - np.sqrt(obs_error_var / (hpbht + obs_error_var)))
-            pbht = (xprime.T * hxprime) * rn
-        
-            if localize == 1:
-                Cvect = CMat[iobs, :]
-                kfgain = np.multiply(Cvect.T, (pbht / (hpbht + obs_error_var)))
-            else:
-                kfgain = pbht / (hpbht + obs_error_var)
+        HXens = np.zeros((ensemble_size, nobsgrid_l))
+        for ilag in range(zens.shape[0]):   
+            zens_ilag = zens[ilag, :, :]
+            HXens[:, int(ilag*nobsgrid):int((ilag+1)*nobsgrid)] = (Hk @ zens_ilag.T).T  # 40*240
 
-            hxens_adm = (Hk[iobs, :] * zens_adm.T).T
-            hxprime_adm = hxens_adm - np.mean(hxens_adm, axis=0)
+        HXmean = np.mean(HXens, axis=0)
+        HXprime = HXens - HXmean
 
-            mean_inc = (kfgain * (zobs[0, iobs] - hxmean)).T
-            prime_inc = - (gainfact * kfgain * hxprime.T).T
-            prime_inc_adm = - (gainfact * kfgain * hxprime_adm.T).T
+        Xens = zens[-1,:,:]
+        Xmean = np.mean(Xens, axis=0)
+        Xprime = Xens - Xmean
 
-            zens = zens + mean_inc + prime_inc
-            zens_adm = zens_adm + mean_inc + prime_inc_adm
+        CMat_l = np.array(np.tile(CMat, (zens.shape[0],1)).T)
+        PHt = Xprime.T @ HXprime * rn
+        HPHt = HXprime.T @ HXprime * rn
+        mean_inc = np.multiply(CMat_l, PHt @ inv(HPHt + R)) @ (zobs - HXmean)
 
-        # zens = serial2(nobsgrid, np.array(zens), np.array(Hk), rn, obs_error_var, localize, np.array(CMat), zobs, mean_numba)
-        # return np.mat(zens)
-        return zens, zens_adm
+        sqrtHPHtR = sqrtm(HPHt + R).real
+        pert_inc = - (np.multiply(CMat_l, PHt @ (inv(sqrtHPHtR)).T @ inv(sqrtHPHtR + sqrtm(R))) @ HXprime.T).T
+
+        Xens = Xens + mean_inc + pert_inc
+
+        return np.mat(Xens)
 
     elif serial_update == 3:
         rn = 1.0 / (ensemble_size - 1)

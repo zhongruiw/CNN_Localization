@@ -1,7 +1,7 @@
 # ----- L05ensrf for elf localization -----
 # coding by Zhongrui Wang
-# version: 2.5
-# update: add rtps inf; git repo; fix bug 481
+# version: 2.6
+# update: inde-eva; add rtps inf; git repo; fix bug 481
 
 import sys 
 sys.path.append('/home/lllei/AI_localization/L05/git_repo/general')

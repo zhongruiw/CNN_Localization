@@ -1,7 +1,7 @@
 # ----- model training -----
 # coding by Zhongrui Wang
-# version: 2.2
-# update: add kg rolling, fix random seed
+# version: 2.3
+# update: average Hk, add kg rolling, fix random seed
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -44,16 +44,31 @@ for iobs in range(0, nobs):
     x1 = obs_grids[iobs] - 1
     Hk[iobs, x1] = 1.0
 
+# ave_range = 0.25 * model_size
+# if ave_range % 2 != 0:
+#     raise ValueError('average range * model_size should be an even number')
+# else:
+#     for iobs in range(0, nobsgrid):
+#         x1 = obs_grids[iobs] - 1
+#         if x1+int(ave_range/2)+1 > model_size:
+#             Hk[iobs, x1-int(ave_range/2):model_size] = 1.0 / (ave_range+1)
+#             Hk[iobs, 0:x1+int(ave_range/2)+1-model_size] = 1.0 / (ave_range+1)
+#         elif x1-int(ave_range/2) < 0:
+#             Hk[iobs, 0:x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
+#             Hk[iobs, x1-int(ave_range/2):] = 1.0 / (ave_range+1)        
+#         else:
+#             Hk[iobs, x1-int(ave_range/2):x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
+
 # -------------------- prepare data ----------------------
 # load data
-kg_f = np.load('/home/lllei/AI_localization/L05/e2000_inf1050_e40_inf1050_loc240/200040/save_interval_6h/kg_f_5y.npy')
+kg_f = np.load('/scratch/lllei/F16/singobs/2000/kg_f_5y.npy')
 # kg_f = np.load('/scratch/lllei/kg_f_25y_0.npy')
 # for i in range(1,5):
 #     fname = '/scratch/lllei/kg_f_25y_{:d}.npy'
 #     kg_f = np.concatenate((kg_f, np.load(fname.format(i))), axis=0)
 
 # Loss: kgain mse
-kg_t = np.load('/home/lllei/AI_localization/L05/spatially_averaged/avrange_00625/200040/kg_t_5y.npy')
+kg_t = np.load('/scratch/lllei/F16/singobs/2000/kg_t_5y.npy')
 
 # roll kg (optional)
 # for j in range(0, nobs):
@@ -200,7 +215,7 @@ else:
     model = srcnn(batch_size=batch_size)
 
     # train the model
-    history = model.fit(train_dataset, epochs=4, validation_data=val_dataset)
+    history = model.fit(train_dataset, epochs=8, validation_data=val_dataset)
     keys = list(history.history.keys())
 
     # evaluate the model       

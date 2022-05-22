@@ -1,0 +1,6 @@
+nohup: ignoring input
+truth shape: (7201, 240)
+Traceback (most recent call last):
+  File "L05ensrf.py", line 41, in <module>
+    print('observations error std:', np.std(zt-zobs_total))
+ValueError: operands could not be broadcast together with shapes (7201,240) (81,240) 

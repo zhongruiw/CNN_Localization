@@ -1,10 +1,10 @@
-# ----- L05ensrf for srcnn localization -----
+# ----- L05ensrf  -----
 # coding by Zhongrui Wang
-# version: 1.0
+# version: 1.5
+# update: add rtps inf; multiple inf,loc; git repo; allow deflation
 
 import sys 
 sys.path.append('/home/lllei/AI_localization/L05/git_repo/general')
-sys.path.append('/home/lllei/AI_localization/L05/F15/singobs/train/ai/CNN/Loss_Kg_t/SRCNN_Dong/tune/219_20_5_30epc')
 
 import numpy as np
 from construct_GC_2d import construct_GC_2d
@@ -13,12 +13,6 @@ from EAKF_wzr import EAKF_wzr
 from os.path import dirname, join as pjoin
 from scipy.io import loadmat
 from step_L04 import step_L04
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.layers import InputSpec 
-from tensorflow.python.keras.utils import conv_utils
-from give_a_model import srcnn
 
 
 data_dir = '/scratch/lllei/data'
@@ -84,12 +78,6 @@ print('observations error std:', np.std(zt-zobs_total))
 
 
 def ensrf(ztruth, zics_total, zobs_total):
-    # -------------------- model setting --------------------
-    model = srcnn()
-    model.load_weights('/home/lllei/AI_localization/L05/F15/singobs/train/ai/CNN/Loss_Kg_t/SRCNN_Dong/tune/219_20_5_30epc/my_weights/srcnn')
-    
-    # -------------------- assimilation ---------------------
-
     serial_update = 1
 
     # analysis period
@@ -99,24 +87,14 @@ def ensrf(ztruth, zics_total, zobs_total):
     # -------------------------------------------------------------------------------
     # eakf parameters
     ensemble_size = 40
-    # adm_ensemble_size = 980
-    inde_ensemble_size = 40
     ens_mem_beg = 248
     ens_mem_end = ens_mem_beg + ensemble_size
-    # adm_ens_mem_beg = ens_mem_end
-    # adm_ens_mem_end = adm_ens_mem_beg + adm_ensemble_size
-    inde_ens_mem_beg = 248
-    inde_ens_mem_end = inde_ens_mem_beg + inde_ensemble_size
-    
-    inflation_value = 1.05
-    inflation_value_inde = 1.05
+    inflation_values = [1.05]
+    ninf = len(inflation_values)
+    localization_values = [240]
+    nloc = len(localization_values)
     localize = 1
-    localization_value = 240
-    localize_inde = 1
-    # localization_value_inde = 120
-    # localize_inde_func = np.load('reg_loc_beta.npy')
-    # localize_inde_eps = np.load('reg_loc_eps.npy')
-
+    # localize_inde = 1
     # -------------------------------------------------------------------------------
 
     # -------------------------------------------------------------------------------
@@ -201,135 +179,93 @@ def ensrf(ztruth, zics_total, zobs_total):
     a[2 * smooth_steps] = a[2 * smooth_steps] / 2.00
     # -------------------------------------------------------------------------------
     
-    CMat = np.mat(construct_GC_2d(localization_value, model_size, obs_grids))
-    # CMat_inde = np.mat(construct_func_2d(localize_inde_func, model_size, obs_grids))
-    # eps_inde = np.mat(construct_func_2d(localize_inde_eps, model_size, obs_grids))
-    # cmat = np.array(CMat)
-    # cmat_inde = np.array(CMat_inde)
-    # CMat_state = np.mat(construct_GC_2d(localization_value, model_size, model_grids))
+    prior_rmse = np.zeros((nobstime,ninf,nloc))
+    analy_rmse = np.zeros((nobstime,ninf,nloc))
+    prior_spread_rmse = np.zeros((nobstime,ninf,nloc))
+    analy_spread_rmse = np.zeros((nobstime,ninf,nloc))    
+    prior_err = np.zeros((ninf,nloc))
+    analy_err = np.zeros((ninf,nloc))
 
-    zens = np.mat(zics_total[ens_mem_beg: ens_mem_end, :])  # ensemble are drawn from ics set
-    # zens_inde = np.mat(zics_total[inde_ens_mem_beg: inde_ens_mem_end, :])
+    for iinf in range(ninf):
+        inflation_value = inflation_values[iinf]
 
+        for iloc in range(nloc):
+            localization_value = localization_values[iloc]
 
-    # save settings
-    # save_interval = 10
-    # save_num = int(time_steps / save_interval)
-    # kg_f = np.zeros((save_num, model_size, nobsgrid))
-    # kg_t = np.zeros((save_num, model_size, nobsgrid))
-    # pb_f = np.zeros((save_num, model_size, model_size))
-    # pb_t = np.zeros((save_num, model_size, model_size))
-    # isave = 0
+            CMat = np.mat(construct_GC_2d(localization_value, model_size, obs_grids))
+            # CMat_inde = np.mat(construct_func_2d(localize_inde_func, model_size, obs_grids))
+            # eps_inde = np.mat(construct_func_2d(localize_inde_eps, model_size, obs_grids))
+            # cmat = np.array(CMat)
+            # cmat_inde = np.array(CMat_inde)
+            # CMat_state = np.mat(construct_GC_2d(localization_value, model_size, model_grids))
 
-    # analy_err_kg_f = np.zeros(nobstime)
-    # analy_err_kg_t = np.zeros(nobstime)
-    # analy_err_gc = np.zeros(nobstime)
-    prior_spread = np.zeros((model_size, nobstime))
-    analy_spread = np.zeros((model_size, nobstime))
-    # prior_spread_inde = np.zeros((model_size, nobstime))
-    # analy_spread_inde = np.zeros((model_size, nobstime))
+            zens = np.mat(zics_total[ens_mem_beg: ens_mem_end, :])  # ensemble are drawn from ics set
 
-    zeakf_prior = np.zeros((model_size, nobstime))
-    # zens_times = np.empty((time_steps+1, model_size))
-    zeakf_analy = np.empty((model_size, nobstime))
-    # zeakf_analy_adm = np.empty((model_size, nobstime))
-    # zeakf_analy_inde = np.empty((model_size, nobstime))
-    zeakf_analy_indeself = np.empty((model_size, nobstime))
+            prior_spread = np.zeros((model_size, nobstime))
+            analy_spread = np.zeros((model_size, nobstime))
+            zeakf_prior = np.zeros((model_size, nobstime))
+            zeakf_analy = np.empty((model_size, nobstime))
+            # zens_times = np.empty((time_steps+1, model_size))
 
-    # zens_times[0, :] = np.mean(ensemble.z, axis=0)
+            for iassim in range(0, nobstime):
+                print(iassim)
 
-    for iassim in range(0, nobstime):
-        print(iassim)
-        # EnKF step
-        obsstep = iassim * obs_freq_timestep + 1
+                # EnKF step
+                obsstep = iassim * obs_freq_timestep + 1
 
-        # shift adjoint ensemble mean to ensemble mean
-        # zens_adm = zens_adm + (np.mean(zens, axis=0) - np.mean(zens_adm, axis=0))
+                zeakf_prior[:, iassim] = np.mean(zens, axis=0)  # prior ensemble mean
+                prior_spread[:, iassim] = np.std(zens, axis=0, ddof=1)
 
-        zeakf_prior[:, iassim] = np.mean(zens, axis=0)  # prior ensemble mean
-        prior_spread[:, iassim] = np.std(zens, axis=0, ddof=1)
+                zobs = np.mat(zobs_total[iassim, :])
 
-        zobs = np.mat(zobs_total[iassim, :])
+                # inflation RTPP
+                ensmean = np.mean(zens, axis=0)
+                ensp = zens - ensmean
+                zens = ensmean + ensp * inflation_value
 
-        # inflation RTPP
-        ensmean = np.mean(zens, axis=0)
-        ensp = zens - ensmean
-        zens = ensmean + ensp * inflation_value
+                # save inflated prior zens
+                zens_prior = zens
 
-        # save inflated prior zens
-        zens_prior = zens
-        # zens_adm_prior = zens_adm
-        # zens_inde_prior = zens_inde
+                # serial EnSRF update
+                zens = EAKF_wzr(1, model_size, ensemble_size, ensemble_size,
+                                nobsgrid, zens, zens, Hk, obs_error_var, localize, CMat, zobs)
 
-        rn = 1.0 / (ensemble_size - 1)
-        Xmean = np.mean(zens, axis=0)
-        Xprime = zens - Xmean
-        HXens = (Hk * zens.T).T
-        HXprime = HXens - (Hk * Xmean.T).T
-        PbHt = (Xprime.T * HXprime) * rn
-        HPbHt = (HXprime.T * HXprime) * rn
-        kg = PbHt * (HPbHt + R).I
+                # # inflation RTPS
+                # std_prior = np.std(zens_prior, axis=0, ddof=1)
+                # std_analy = np.std(zens, axis=0, ddof=1)
+                # ensmean = np.mean(zens, axis=0)
+                # ensp = zens - ensmean
+                # zens = ensmean + np.multiply(ensp, (1 + inflation_value*(std_prior-std_analy)/std_analy))
+               
+                # save zens_analy_kg_f
+                zens_analy_kg_f = np.mean(zens, axis=0)
+                zeakf_analy[:, iassim] = zens_analy_kg_f
 
-        kg_ai = np.mat(np.squeeze(model.predict(np.reshape(np.array(kg), (1,model_size,nobsgrid,1)))))
+                # save analy_spread
+                analy_spread[:, iassim] = np.std(zens, axis=0, ddof=1)
 
-        zens_prior_mean = np.mean(zens_prior, axis=0)
-        HXmean = Hk * zens_prior_mean.T
-        obs_inc = kg_ai * (zobs.T - HXmean)
-        zens_analy_indeself = np.mean((zens_prior + obs_inc.T), axis=0)
-        zeakf_analy_indeself[:, iassim] = zens_analy_indeself
-        
-        # serial EnSRF update
-        zens = EAKF_wzr(1, model_size, ensemble_size, ensemble_size,
-                        nobsgrid, zens, zens, Hk, obs_error_var, localize, CMat, zobs)
+                # check for an explosion
+                if False in np.isreal(zens):
+                    print('Found complex numbers, stopping this run')
+                    return
 
-        # save zens_analy_kg_f
-        zens_analy_kg_f = np.mean(zens, axis=0)
-        zeakf_analy[:, iassim] = zens_analy_kg_f
+                # ensemble model advance, but no advance model from the last obs
+                if iassim < nobstime - 1:
+                    step_beg = obsstep
+                    step_end = (iassim + 1) * obs_freq_timestep
+                    # start = time.time()
+                    for istep in range(step_beg, step_end + 1):
+                        zens = step_L04(ensemble_size, zens, model_size, ss2, smooth_steps, a, model_number, K4, H, K, K2, sts2, coupling,
+                                         space_time_scale, forcing, delta_t)
+                    
+            zt = ztruth.T
+            prior_rmse[:, iinf, iloc] = np.sqrt(np.mean((zt - zeakf_prior) ** 2, axis=0))
+            analy_rmse[:, iinf, iloc] = np.sqrt(np.mean((zt - zeakf_analy) ** 2, axis=0))
+            prior_spread_rmse[:, iinf, iloc] = np.sqrt(np.mean(prior_spread ** 2, axis=0))
+            analy_spread_rmse[:, iinf, iloc] = np.sqrt(np.mean(analy_spread ** 2, axis=0))
 
-        # recenter ensemble mean to ai updated ensemble mean
-        zens = zens - np.mean(zens, axis=0) + zens_analy_indeself
-
-        # save analy_spread
-        analy_spread[:, iassim] = np.std(zens, axis=0, ddof=1)
-        # analy_spread_inde[:, iassim] = np.std(zens_inde, axis=0, ddof=1)
-
-        # check for an explosion
-        if False in np.isreal(zens):
-            print('Found complex numbers, stopping this run')
-            return
-
-        # ensemble model advance, but no advance model from the last obs
-        if iassim < nobstime - 1:
-            step_beg = obsstep
-            step_end = (iassim + 1) * obs_freq_timestep
-            # start = time.time()
-            for istep in range(step_beg, step_end + 1):
-                zens = step_L04(ensemble_size, zens, model_size, ss2, smooth_steps, a, model_number, K4, H, K, K2, sts2, coupling,
-                                 space_time_scale, forcing, delta_t)
-            
-    zt = ztruth.T
-    prior_rmse = np.sqrt(np.mean((zt - zeakf_prior) ** 2, axis=0))
-    analy_rmse = np.sqrt(np.mean((zt - zeakf_analy) ** 2, axis=0))
-    prior_spread_rmse = np.sqrt(np.mean(prior_spread ** 2, axis=0))
-    # prior_spread_inde_rmse = np.sqrt(np.mean(prior_spread_inde ** 2, axis=0))
-    analy_spread_rmse = np.sqrt(np.mean(analy_spread ** 2, axis=0))
-    # analy_spread_inde_rmse = np.sqrt(np.mean(analy_spread_inde ** 2, axis=0))
-
-    # analy_adm_rmse = np.sqrt(np.mean((zt - zeakf_analy_adm) ** 2, axis=0))
-    # analy_inde_rmse = np.sqrt(np.mean((zt - zeakf_analy_inde) ** 2, axis=0))
-    analy_indeself_rmse = np.sqrt(np.mean((zt - zeakf_analy_indeself) ** 2, axis=0))
-
-    prior_err = np.mean(prior_rmse[iobsbeg - 1: iobsend])
-    analy_err = np.mean(analy_rmse[iobsbeg - 1: iobsend])
-    # analy_adm_err = np.mean(analy_adm_rmse[iobsbeg - 1: iobsend])
-    # analy_inde_err = np.mean(analy_inde_rmse[iobsbeg - 1: iobsend])
-    analy_indeself_err = np.mean(analy_indeself_rmse[iobsbeg - 1: iobsend])
-
-    print('prior error = {0:.6f}'.format(prior_err))
-    print('analysis gc error = {0:.6f}'.format(analy_err))
-    print('analysis ai error = {0:.6f}'.format(analy_indeself_err))
-    # print('analy_adm error = {0:.6f}'.format(analy_adm_err))
-    # print('analy_inde on base error = {0:.6f}'.format(analy_inde_err))
+            prior_err[iinf, iloc] = np.mean(prior_rmse[iobsbeg - 1: iobsend, iinf, iloc])
+            analy_err[iinf, iloc] = np.mean(analy_rmse[iobsbeg - 1: iobsend, iinf, iloc])
 
     # save
     np.save('prior_rmse.npy', prior_rmse)
@@ -351,7 +287,17 @@ def ensrf(ztruth, zics_total, zobs_total):
     np.save('zeakf_analy.npy', zeakf_analy)
     # # np.save('zeakf_analy_adm.npy', zeakf_analy_adm)
     # np.save('zeakf_analy_inde.npy', zeakf_analy_inde)
-    np.save('zeakf_analy_indeself.npy', zeakf_analy_indeself)
+
+    # minerr = np.min(prior_err)
+    # inds = np.where(prior_err == minerr)
+    # print('min prior error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(minerr, inflation_values[inds[0][0]], localization_values[inds[1][0]]))
+    # minerr = np.min(analy_err)
+    # inds = np.where(analy_err == minerr)
+    # ind = inds[0][0]
+    # print('min analy error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(minerr, inflation_values[inds[0][0]], localization_values[inds[1][0]]))
+
+    print('prior error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(prior_err[0,0], inflation_values[0], localization_values[0]))
+    print('analy error = {0:.6f}, inflation = {1:.3f}, localizaiton = {2:d}'.format(analy_err[0,0], inflation_values[0], localization_values[0]))
 
     return prior_err
 

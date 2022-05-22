@@ -1,0 +1,5 @@
+nohup: ignoring input
+Traceback (most recent call last):
+  File "L05ensrf.py", line 38, in <module>
+    obsf = loadmat(obsfname)
+NameError: name 'obsfname' is not defined

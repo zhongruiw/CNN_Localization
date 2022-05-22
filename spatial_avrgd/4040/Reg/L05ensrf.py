@@ -1,7 +1,7 @@
 # ----- L05ensrf reg -----
 # coding by Zhongrui Wang
-# version: 2.0
-# update: git repo; without residual
+# version: 2.1
+# update: inde-eva; git repo; without residual
 
 import sys 
 sys.path.append('/home/lllei/AI_localization/L05/git_repo/general')
@@ -19,15 +19,18 @@ from step_L04 import step_L04
 data_dir = '/scratch/lllei/data'
 # data_dir = '/Users/ree/Documents/DataAssimilization/hybrid_L05/data'
 icsfname = pjoin(data_dir, 'ics_ms3_from_zt1year_sz3001.mat')
-obsfname = pjoin(data_dir, 'obs_ms3_240s_6h_sptavd00625.mat')
-truthfname = pjoin(data_dir, 'zt_1year_ms3.mat')
+obsfname = pjoin(data_dir, 'obs_ms3_err1_240s_6h_25y_sptavd00625.mat')
+truthfname = pjoin(data_dir, 'zt_25year_ms3_6h.mat')
+
 
 # get truth
-time_steps = 200 * 360  # 360 days(1 day~ 200 time steps)
+time_steps = 200 * 450  # days(1 day~ 200 time steps)
 obs_freq_timestep = 50
 obsdens = 4
 truthf = loadmat(truthfname)
-ztruth = truthf['Zt'][0:time_steps+1, :]
+eva_bg = int(23 * 360 * 200 / obs_freq_timestep)
+eva_ed = eva_bg+int(time_steps/obs_freq_timestep+1)
+ztruth = truthf['zens_times'][eva_bg:eva_ed, :]
 
 # get initial condition
 icsf = loadmat(icsfname)
@@ -35,13 +38,12 @@ zics_total = icsf['zics_total1']
 
 # get observation
 obsf = loadmat(obsfname)
-zobs_total = obsf['zobs_total'][0:int(time_steps/obs_freq_timestep+1), :]  # 360 days
+zobs_total = obsf['zobs_total'][eva_bg:eva_ed, :]
 
 # model parameters
 model_size = 960  # N
 # observation parameters
 obs_density = 4
-obs_error_var = 1.0
 
 # regular temporal / sptial obs
 model_grids = np.arange(1, model_size + 1)
@@ -69,8 +71,7 @@ else:
         else:
             Hk[iobs, x1-int(ave_range/2):x1+int(ave_range/2)+1] = 1.0 / (ave_range+1)
 
-zt = ztruth[0:time_steps+1:obs_freq_timestep, :] @ Hk.T
-
+zt = ztruth @ Hk.T
 print('truth shape:', np.shape(zt))
 print('observations error std:', np.std(zt-zobs_total))
 
@@ -82,16 +83,16 @@ def ensrf(ztruth, zics_total, zobs_total):
     serial_update = 1
 
     # analysis period
-    iobsbeg = 41
+    iobsbeg = 361
     iobsend = int(time_steps/obs_freq_timestep)+1
 
     # -------------------------------------------------------------------------------
     # eakf parameters
     ensemble_size = 40
     inde_ensemble_size = 40
-    ens_mem_beg = 1
+    ens_mem_beg = 248
     ens_mem_end = ens_mem_beg + ensemble_size
-    inde_ens_mem_beg = 1
+    inde_ens_mem_beg = 248
     inde_ens_mem_end = inde_ens_mem_beg + inde_ensemble_size
     
     inflation_value = 1.05
@@ -141,7 +142,7 @@ def ensrf(ztruth, zics_total, zobs_total):
     # for iobs in range(0, nobsgrid):
     #     x1 = obs_grids[iobs] - 1
     #     Hk[iobs, x1] = 1.0
-    
+        
     ave_range = 0.0625 * model_size
     if ave_range % 2 != 0:
         raise ValueError('average range * model_size should be an even number')
@@ -280,7 +281,7 @@ def ensrf(ztruth, zics_total, zobs_total):
                 zens_inde = step_L04(inde_ensemble_size, zens_inde, model_size, ss2, smooth_steps, a, model_number, K4, H, K, K2, sts2,
                                 coupling, space_time_scale, forcing, delta_t)
 
-    zt = ztruth[0: time_steps + 1: obs_freq_timestep, :].T
+    zt = ztruth.T
     prior_rmse = np.sqrt(np.mean((zt - zeakf_prior) ** 2, axis=0))
     analy_rmse = np.sqrt(np.mean((zt - zeakf_analy) ** 2, axis=0))
     prior_spread_rmse = np.sqrt(np.mean(prior_spread ** 2, axis=0))

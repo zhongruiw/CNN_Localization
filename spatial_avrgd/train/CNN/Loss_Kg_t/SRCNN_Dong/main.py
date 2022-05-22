@@ -62,14 +62,14 @@ else:
 
 # -------------------- prepare data ----------------------
 # load data
-kg_f = np.load('/scratch/lllei/spatially_averaged/200040/avrgd_025/obs_dens4/kg_f_5y.npy')
+kg_f = np.load('/scratch/lllei/spatially_averaged/200040/avrgd_00625/kg_f_5y.npy')
 # kg_f = np.load('/scratch/lllei/kg_f_25y_0.npy')
 # for i in range(1,5):
 #     fname = '/scratch/lllei/kg_f_25y_{:d}.npy'
 #     kg_f = np.concatenate((kg_f, np.load(fname.format(i))), axis=0)
 
 # Loss: kgain mse
-kg_t = np.load('/scratch/lllei/spatially_averaged/200040/avrgd_025/obs_dens4/kg_t_5y.npy')
+kg_t = np.load('/scratch/lllei/spatially_averaged/200040/avrgd_00625/kg_t_5y.npy')
 
 # roll kg (optional)
 # for j in range(0, nobs):
