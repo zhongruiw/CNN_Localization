@@ -8,6 +8,30 @@ from scipy.io import savemat
 
 
 def EAKF_wzr(serial_update, model_size, ensemble_size, adm_ensemble_size, nobsgrid, zens, zens_adm, Hk, obs_error_var, localize, CMat, zobs, **kwargs):
+    if serial_update == 'stochastic_enkf':
+        rn = 1.0 / (ensemble_size - 1)
+
+        for iobs in range(0, nobsgrid):
+            xmean = np.mean(zens, axis=0)  # 1xn
+            xprime = zens - xmean
+            hxens = (Hk[iobs, :] * zens.T).T  # 40*1
+            hxmean = np.mean(hxens, axis=0)
+            hxprime = hxens - hxmean
+            hpbht = (hxprime.T * hxprime * rn)[0, 0]
+            pbht = (xprime.T * hxprime) * rn
+        
+            if localize == 1:
+                Cvect = CMat[iobs, :]
+                kfgain = np.multiply(Cvect.T, (pbht / (hpbht + obs_error_var)))
+            else:
+                kfgain = pbht / (hpbht + obs_error_var)
+
+            inc = (kfgain * (zobs[:,iobs] - hxens).T).T
+
+            zens = zens + inc
+
+        return zens
+
     if serial_update == 0:
         rn = 1.0 / (ensemble_size - 1)
         for iobs in range(0, nobsgrid):
@@ -116,16 +140,23 @@ def EAKF_wzr(serial_update, model_size, ensemble_size, adm_ensemble_size, nobsgr
         CMat_l = np.array(np.tile(CMat, (zens.shape[0],1)).T)
         PHt = Xprime.T @ HXprime * rn
         HPHt = HXprime.T @ HXprime * rn
-        mean_inc = np.multiply(CMat_l, PHt @ inv(HPHt + R)) @ (zobs - HXmean)
+        gain = PHt @ inv(HPHt + R)
 
         sqrtHPHtR = sqrtm(HPHt + R).real
-        pert_inc = - (np.multiply(CMat_l, PHt @ (inv(sqrtHPHtR)).T @ inv(sqrtHPHtR + sqrtm(R))) @ HXprime.T).T
+        gain_pert = PHt @ (inv(sqrtHPHtR)).T @ inv(sqrtHPHtR + sqrtm(R))
+
+        if localize == 1:
+            mean_inc = np.multiply(CMat_l, gain) @ (zobs - HXmean)
+            pert_inc = - (np.multiply(CMat_l, gain_pert) @ HXprime.T).T
+        else:
+            mean_inc = gain @ (zobs - HXmean)
+            pert_inc = - (gain_pert @ HXprime.T).T
 
         Xens = Xens + mean_inc + pert_inc
 
-        return np.mat(Xens)
+        return np.mat(Xens), gain, gain_pert
 
-    elif serial_update == 3:
+    elif serial_update == 3: # hybrid
         rn = 1.0 / (ensemble_size - 1)
         lamda = 1 - theta
         zens_prior = zens
