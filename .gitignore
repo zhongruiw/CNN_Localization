@@ -31,3 +31,4 @@ general/.ipynb_checkpoints/gamma-checkpoint.ipynb
 general/.ipynb_checkpoints/visualize_FitureMaps_kg-checkpoint.ipynb
 *.mat
 *.npy
+/hidden
